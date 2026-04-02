@@ -22,23 +22,41 @@ async function startServer() {
       return res.status(400).send("Error: No query provided. Use ?q=your+question");
     }
 
-    try {
-      const model = genAI.models.getGenerativeModel({ 
-        model: "gemini-3-flash-preview",
-        systemInstruction: "You are a concise assistant. Provide direct answers without conversational filler. Use plain text or simple markdown."
-      });
-      
-      const result = await model.generateContent(query);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Return raw text for easy printing in Jupyter
-      res.setHeader('Content-Type', 'text/plain');
-      res.send(text);
-    } catch (error) {
-      console.error("API Error:", error);
-      res.status(500).send("Error: Failed to fetch AI response.");
+    const keys = [
+      process.env.API1 || process.env.GEMINI_API_KEY,
+      process.env.API2,
+      process.env.API3
+    ].filter(Boolean) as string[];
+
+    const MODELS = [
+      "gemini-3-flash-preview",
+      "gemini-3.1-flash-lite-preview",
+      "gemini-3.1-pro-preview"
+    ];
+
+    for (const modelName of MODELS) {
+      for (const key of keys) {
+        try {
+          const genAI = new GoogleGenAI({ apiKey: key });
+          const model = genAI.models.getGenerativeModel({ 
+            model: modelName,
+            systemInstruction: "You are a concise assistant. Provide direct answers."
+          });
+          
+          const result = await model.generateContent(query);
+          const response = await result.response;
+          const text = response.text();
+          
+          res.setHeader('Content-Type', 'text/plain');
+          return res.send(text);
+        } catch (error) {
+          console.error(`Local Fallback failed with key ${key.substring(0, 8)}... and model ${modelName}`);
+          continue;
+        }
+      }
     }
+
+    res.status(500).send("Error: All fallback keys and models failed.");
   });
 
   // Vite middleware for development
