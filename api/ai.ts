@@ -7,7 +7,10 @@ export const config = {
 const MODELS = [
   "gemini-3-flash-preview",
   "gemini-3.1-flash-lite-preview",
-  "gemini-3.1-pro-preview"
+  "gemini-3.1-pro-preview",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-preview"
 ];
 
 async function tryGenerate(apiKey: string, modelName: string, query: string) {
@@ -31,7 +34,7 @@ export default async function handler(req: Request) {
   }
 
   const keys = [
-    process.env.API1 || process.env.GEMINI_API_KEY,
+    process.env.API1 ,
     process.env.API2,
     process.env.API3
   ].filter(Boolean) as string[];
