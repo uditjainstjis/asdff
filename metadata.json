@@ -1,0 +1,5 @@
+{
+  "name": "Quick AI Lookup",
+  "description": "A minimal interface to query Gemini via URL parameters or a simple input field, designed for quick lookups.",
+  "requestFramePermissions": []
+}
