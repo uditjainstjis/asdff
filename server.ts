@@ -38,17 +38,16 @@ async function startServer() {
       for (const key of keys) {
         try {
           const genAI = new GoogleGenAI({ apiKey: key });
-          const model = genAI.models.getGenerativeModel({ 
+          const response = await genAI.models.generateContent({ 
             model: modelName,
-            systemInstruction: "You are a concise assistant. Provide direct answers."
+            contents: query,
+            config: {
+              systemInstruction: "You are a concise assistant. Provide direct answers."
+            }
           });
           
-          const result = await model.generateContent(query);
-          const response = await result.response;
-          const text = response.text();
-          
           res.setHeader('Content-Type', 'text/plain');
-          return res.send(text);
+          return res.send(response.text);
         } catch (error) {
           console.error(`Local Fallback failed with key ${key.substring(0, 8)}... and model ${modelName}`);
           continue;

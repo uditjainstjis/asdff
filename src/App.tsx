@@ -5,12 +5,26 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Loader2, Send, BookOpen, Command } from "lucide-react";
+import { Search, Loader2, Send, BookOpen, Command, AlertCircle } from "lucide-react";
 import React, { useEffect, useState, useRef } from "react";
 
-// Initialize Gemini API
-// Note: process.env.GEMINI_API_KEY is injected by the platform
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+// Fallback logic for frontend
+const getAIClient = (keyIndex: number) => {
+  const keys = [
+    process.env.API1 || process.env.GEMINI_API_KEY,
+    process.env.API2,
+    process.env.API3
+  ].filter(Boolean) as string[];
+  
+  const apiKey = keys[keyIndex] || "";
+  return new GoogleGenAI({ apiKey });
+};
+
+const MODELS = [
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite-preview",
+  "gemini-3.1-pro-preview"
+];
 
 export default function App() {
   const [query, setQuery] = useState("");
@@ -19,7 +33,7 @@ export default function App() {
   const [error, setError] = useState("");
   const responseRef = useRef<HTMLDivElement>(null);
 
-  // Function to handle the AI query
+  // Function to handle the AI query with fallback
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
     
@@ -27,22 +41,40 @@ export default function App() {
     setError("");
     setResponse("");
 
-    try {
-      const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: searchQuery,
-        config: {
-          systemInstruction: "You are a concise and helpful assistant. Provide direct, accurate answers. Use markdown for formatting if needed. Keep it brief unless detail is necessary.",
-        },
-      });
+    const keysCount = [
+      process.env.API1 || process.env.GEMINI_API_KEY,
+      process.env.API2,
+      process.env.API3
+    ].filter(Boolean).length;
 
-      setResponse(response.text || "No response received.");
-    } catch (err) {
-      console.error("Gemini Error:", err);
-      setError("Failed to fetch response. Please check your connection or API key.");
-    } finally {
-      setLoading(false);
+    // Try each model
+    for (const modelName of MODELS) {
+      // Try each key for this model
+      for (let i = 0; i < Math.max(1, keysCount); i++) {
+        try {
+          const ai = getAIClient(i);
+          const result = await ai.models.generateContent({
+            model: modelName,
+            contents: searchQuery,
+            config: {
+              systemInstruction: "You are a concise and helpful assistant. Provide direct, accurate answers.",
+            },
+          });
+
+          if (result.text) {
+            setResponse(result.text);
+            setLoading(false);
+            return;
+          }
+        } catch (err: any) {
+          console.error(`Frontend failed with model ${modelName} and key index ${i}:`, err);
+          continue; // Try next key/model
+        }
+      }
     }
+
+    setError("All API keys and models failed. Please check your connection and ensure your keys are set in the Secrets panel.");
+    setLoading(false);
   };
 
   // Check for URL parameters on mount
@@ -59,7 +91,6 @@ export default function App() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSearch(query);
-    // Update URL without refreshing to allow bookmarking/sharing
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set("query", query);
     window.history.pushState({}, "", newUrl);
@@ -67,14 +98,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-100 font-sans selection:bg-blue-500/30">
-      {/* Background Glow */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
         <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
       </div>
 
       <main className="relative max-w-3xl mx-auto px-6 pt-20 pb-32">
-        {/* Header */}
         <header className="mb-12 text-center">
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
@@ -92,17 +121,8 @@ export default function App() {
           >
             What do you want to <span className="text-blue-400">know?</span>
           </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-gray-400 text-sm"
-          >
-            Type below or use <code className="bg-white/10 px-1.5 py-0.5 rounded text-blue-300">?query=...</code> in the URL
-          </motion.p>
         </header>
 
-        {/* Search Bar */}
         <motion.form 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -130,7 +150,6 @@ export default function App() {
           </div>
         </motion.form>
 
-        {/* Results Area */}
         <AnimatePresence mode="wait">
           {(loading || response || error) && (
             <motion.div
@@ -141,8 +160,9 @@ export default function App() {
               className="space-y-6"
             >
               {error && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                  {error}
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-3">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
                 </div>
               )}
 
@@ -162,8 +182,7 @@ export default function App() {
                     <BookOpen size={16} />
                     <span>Response</span>
                   </div>
-                  <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10">
-                    {/* Simple markdown-like rendering for basic structure */}
+                  <div className="prose prose-invert max-w-none prose-p:leading-relaxed">
                     {response.split('\n').map((line, i) => (
                       <p key={i} className="mb-4 text-gray-300">
                         {line}
@@ -175,31 +194,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Quick Tips */}
-        {!response && !loading && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-12"
-          >
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/[0.07] transition-colors cursor-pointer group" onClick={() => { setQuery("Explain Quantum Entanglement simply"); handleSearch("Explain Quantum Entanglement simply"); }}>
-              <h3 className="text-white font-medium mb-2 group-hover:text-blue-400 transition-colors">Quantum Physics</h3>
-              <p className="text-gray-500 text-xs">"Explain Quantum Entanglement simply"</p>
-            </div>
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/[0.07] transition-colors cursor-pointer group" onClick={() => { setQuery("Summary of the French Revolution"); handleSearch("Summary of the French Revolution"); }}>
-              <h3 className="text-white font-medium mb-2 group-hover:text-blue-400 transition-colors">History</h3>
-              <p className="text-gray-500 text-xs">"Summary of the French Revolution"</p>
-            </div>
-          </motion.div>
-        )}
       </main>
-
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 p-6 text-center text-gray-600 text-xs pointer-events-none">
-        <p>Powered by Gemini 3 Flash • Built for speed</p>
-      </footer>
     </div>
   );
 }

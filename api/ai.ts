@@ -7,22 +7,20 @@ export const config = {
 const MODELS = [
   "gemini-3-flash-preview",
   "gemini-3.1-flash-lite-preview",
-  "gemini-3.1-pro-preview",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-2.5-flash-preview"
+  "gemini-3.1-pro-preview"
 ];
 
 async function tryGenerate(apiKey: string, modelName: string, query: string) {
   if (!apiKey) return null;
   const genAI = new GoogleGenAI({ apiKey });
-  const model = genAI.models.getGenerativeModel({ 
+  const response = await genAI.models.generateContent({ 
     model: modelName,
-    systemInstruction: "You are a concise assistant. Provide direct answers."
+    contents: query,
+    config: {
+      systemInstruction: "You are a concise assistant. Provide direct answers."
+    }
   });
-  const result = await model.generateContent(query);
-  const response = await result.response;
-  return response.text();
+  return response.text;
 }
 
 export default async function handler(req: Request) {
@@ -34,7 +32,7 @@ export default async function handler(req: Request) {
   }
 
   const keys = [
-    process.env.API1 ,
+    process.env.API1 || process.env.GEMINI_API_KEY,
     process.env.API2,
     process.env.API3
   ].filter(Boolean) as string[];
